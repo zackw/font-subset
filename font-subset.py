@@ -2,7 +2,7 @@
 # coding: utf8
 
 import fontforge
-import sys
+from optparse import OptionParser
 
 def glyph_collect_sub_glyphs(glyph, glyph_names):
     sub_types = ("Substitution", "AltSubs", "MultSubs", "Ligature")
@@ -43,8 +43,26 @@ def font_subset(font, subset):
             font.removeGlyph(glyph)
 
 if __name__ == "__main__":
-    f = fontforge.open(sys.argv[1])
+    usage = "%prog [options] input output"
+    parser = OptionParser(usage=usage)
+    parser.add_option("-f", "--font", dest="filename", help="name of input font file to subset", metavar="FILE")
+    parser.add_option("-o", "--output", dest="output", help="name to write subsetted font to", metavar="FILE")
+    (options, args) = parser.parse_args()
+
+    filename = options.filename
+    output = options.output
+
+    if len(args) >= 1:
+        filename = args[0]
+    if len(args) >= 2:
+        output = args[1]
+
+    if not filename:
+        parser.error("You must specify input font filename")
+    if not output:
+        parser.error("You must specify output font filename")
+
     s = (ord(u"أ"), ord(u"م"), ord(u"ي"), ord(u"ر"))
+    f = fontforge.open(filename)
     font_subset(f, s)
-    f.save("subset.sfd")
-    f.generate("subset.ttf")
+    f.generate(output)
