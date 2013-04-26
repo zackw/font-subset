@@ -6,12 +6,12 @@ import sys
 
 def glyph_collect_sub_glyphs(glyph, glyph_names):
     sub_types = ("Substitution", "AltSubs", "MultSubs", "Ligature")
+    glyph_names.add(glyph.glyphname)
     for sub in glyph.getPosSub("*"):
         sub_type = sub[1]
         if sub_type in sub_types:
             for name in sub[2:]:
                 if name not in glyph_names:
-                    glyph_names.add(name)
                     glyph_collect_sub_glyphs(glyph.font[name], glyph_names)
 
 def font_collect_references(font, glyph_names):
@@ -27,9 +27,7 @@ def font_collect_glyph_names(font, subset):
     glyph_names = set()
     for code in subset:
         if code in font:
-            glyph = font[code]
-            glyph_names.add(glyph.glyphname)
-            glyph_collect_sub_glyphs(glyph, glyph_names)
+            glyph_collect_sub_glyphs(font[code], glyph_names)
         else:
             print "font does not support U+%04X" %code
 
