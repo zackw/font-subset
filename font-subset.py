@@ -1,8 +1,11 @@
-#!/usr/bin/env python
+#! /usr/bin/python
 # coding: utf8
 
+import argparse
+import collections
 import fontforge
-from optparse import OptionParser
+import locale
+import sys
 
 def glyph_collect_sub_glyphs(glyph, glyph_names):
     sub_types = ("Substitution", "AltSubs", "MultSubs", "Ligature")
@@ -23,18 +26,22 @@ def font_collect_references(font, glyph_names):
 
     return refs
 
-def font_collect_glyph_names(font, subset):
-    glyph_names = set()
-    for code in subset:
-        if code in font:
-            glyph_collect_sub_glyphs(font[code], glyph_names)
-        else:
-            print "font does not support U+%04X" %code
-
-    return glyph_names
-
 def font_subset(font, subset):
-    names = font_collect_glyph_names(font, subset)
+    chars = set(ord(c) for c in subset)
+    allchars = frozenset(chars)
+    names = set()
+
+    for glyph in font.glyphs():
+        if glyph.unicode in allchars:
+            glyph_collect_sub_glyphs(glyph, names)
+            chars.discard(glyph.unicode)
+
+    if chars:
+        sys.stderr.write("Missing code points: "
+                         + " ".join("U+%04X" % c
+                                    for c in sorted(chars))
+                         + "\n")
+
     refs = font_collect_references(font, names)
     names.update(refs)
 
@@ -42,27 +49,37 @@ def font_subset(font, subset):
         if glyph.glyphname not in names:
             font.removeGlyph(glyph)
 
-if __name__ == "__main__":
-    usage = "%prog [options] input output"
-    parser = OptionParser(usage=usage)
-    parser.add_option("-f", "--font", dest="filename", help="name of input font file to subset", metavar="FILE")
-    parser.add_option("-o", "--output", dest="output", help="name to write subsetted font to", metavar="FILE")
-    (options, args) = parser.parse_args()
+def dump_available_glyphs(font):
+    table = collections.defaultdict(list)
+    for glyph in font.glyphs():
+        table[glyph.unicode].append(glyph.glyphname)
 
-    filename = options.filename
-    output = options.output
+    for code, names in sorted(table.items()):
+        print "U+%04X: %s" % (code, " ".join(sorted(names)))
 
-    if len(args) >= 1:
-        filename = args[0]
-    if len(args) >= 2:
-        output = args[1]
+def main():
+    parser = argparse.ArgumentParser(description="Subset a font.")
+    parser.add_argument("font", help="Font file to take the subset of.")
+    parser.add_argument("output", help="Output file name.",
+                        nargs='?', default='')
+    parser.add_argument("chars", help="Characters to include in the subset.",
+                        nargs='?', default='')
+    args = parser.parse_args()
 
-    if not filename:
-        parser.error("You must specify input font filename")
-    if not output:
-        parser.error("You must specify output font filename")
+    f = fontforge.open(args.font)
 
-    s = (ord(u"أ"), ord(u"م"), ord(u"ي"), ord(u"ر"))
-    f = fontforge.open(filename)
-    font_subset(f, s)
-    f.generate(output)
+    if (args.chars and not args.output) or (args.output and not args.chars):
+        parser.error("Must specify either both or neither of OUTPUT and CHARS.")
+
+    if not args.chars and not args.output:
+        dump_available_glyphs(f)
+    else:
+        coding = locale.getpreferredencoding()
+        font_subset(f, args.chars.decode(coding))
+        f.generate(args.output)
+
+    f.close()
+
+if __name__ == '__main__':
+    main()
+
